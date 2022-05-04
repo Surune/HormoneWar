@@ -5,6 +5,7 @@
 
 Play game!
 
+![plot](./menu.png)
 Move : W A S D
 Shot : Left Click
 
