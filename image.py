@@ -82,6 +82,10 @@ for i in range(1,5):
     shotimg.append(pygame.transform.scale(shot, (int(scale*w*c.SCALE_X), int(scale*h*c.SCALE_Y))))
 shotimg=tuple(shotimg)
 
+mob_shot=pygame.image.load("mob_shot.png")
+w,h=mob_shot.get_size()
+mob_shot=pygame.transform.scale(mob_shot, (int(w*c.SCALE_X), int(h*c.SCALE_Y)))
+
 '''마우스 커서 이미지'''
 mouseimg=pygame.image.load("mouse.png")
 

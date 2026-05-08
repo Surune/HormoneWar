@@ -1,394 +1,284 @@
-import pygame, sys, math
+import math
+import random
+import sys
+
+import pygame
+
 import constant as c
 import image
-import random
 import Mover as m
 
-'''PYGAME 기본 설정'''
 pygame.init()
 pygame.key.set_repeat(True, True)
 pygame.mouse.set_visible(False)
 screen = pygame.display.set_mode((c.WINWIDTH, c.WINHEIGHT), pygame.FULLSCREEN)
 fpsClock = pygame.time.Clock()
-running=True
 
-'''게임에 필요한 변수 목록'''
-menubgm=pygame.mixer.Sound("menusong.wav")
-gamebgm=pygame.mixer.Sound("gamesong.m4a")
-endbgm=pygame.mixer.Sound("ending.m4a")
-mobcnt = 0
-picindex = 0
-healthrange=5
-shotposlist = []
-nowshot = image.shotimg[0]
-charge_temp = 0
-TILESIZE=image.tile_green.get_rect()
-TILEWIDTH=c.WINWIDTH//TILESIZE[2]
-TILEHEIGHT=c.WINHEIGHT//TILESIZE[3]
-WIDTH=TILESIZE[2]*TILEWIDTH
-HEIGHT=TILESIZE[3]*TILEHEIGHT
-HEARTSIZE=image.heart.get_rect()
-dmg, spd, ssd, lif= 0,0,0,0
-endset=0
+menubgm = pygame.mixer.Sound("menusong.wav")
+gamebgm = pygame.mixer.Sound("gamesong.m4a")
+endbgm = pygame.mixer.Sound("ending.m4a")
+TILESIZE = image.tile_green.get_rect()
+TILEWIDTH = c.WINWIDTH // TILESIZE[2]
+TILEHEIGHT = c.WINHEIGHT // TILESIZE[3]
+WIDTH = TILESIZE[2] * TILEWIDTH
+HEIGHT = TILESIZE[3] * TILEHEIGHT
+HEARTSIZE = image.heart.get_rect()
 
-'''텍스트 출력 함수'''
-def text(string, x, y) :
+w, h = image.menu.get_size()
+image.menu = pygame.transform.scale(image.menu, (WIDTH, HEIGHT))
+
+
+def text(string, x, y):
     font = pygame.font.Font(None, 24)
-    text = font.render(string, True, c.WHITE)
-    textRect = text.get_rect()
-    textRect.center = (x,y)
-    screen.blit(text, textRect)
+    rendered = font.render(string, True, c.WHITE)
+    text_rect = rendered.get_rect()
+    text_rect.center = (x, y)
+    screen.blit(rendered, text_rect)
 
-'''기타 변수 선언'''
-player = m.Player()
-bang = m.Enemy()
-surune = 0
-hormonecool=0
-hormoning=False
-mouseimg_rect = image.mouseimg.get_rect()
-hormonetime=0
-hormonenum=random.randint(0,9)
-yap=0
-screen.fill(c.BACKGROUNDCOLOR)
-selected = False
 
-w,h=image.menu.get_size()
-image.menu=pygame.transform.scale(image.menu, (WIDTH, HEIGHT))
-buff_rect=image.buff.get_rect()
-horpos=(random.randint(15, WIDTH-40), random.randint(15, HEIGHT-40))
-
-'''메뉴 선택 화면 출력'''
-menubgm.play()
-while not selected:
-    screen.fill(c.BACKGROUNDCOLOR)
-    screen.blit(image.menu, (0, 0))
-    for event in pygame.event.get():
-        if event.type == pygame.KEYDOWN:
-            if event.key==pygame.K_SPACE:
-                selected = True
-    pygame.display.flip()
-
-missioning=50
-while missioning:
-    screen.fill(c.BACKGROUNDCOLOR)
-    screen.blit(image.mission, (0,0))
-    missioning-=1
-    pygame.display.flip()
-
-'''게임 화면 출력'''
-menubgm.stop()
-gamebgm.play()
-while running:
-    screen.fill(c.BACKGROUNDCOLOR)
-
-    '''타일 출력'''
+def draw_tiles():
     for temp_width in range(TILEWIDTH):
         for temp_height in range(TILEHEIGHT):
             screen.blit(image.tile_green, (temp_width * TILESIZE[2], temp_height * TILESIZE[3]))
 
-    player.shotcool-=1
-    player.invisiblecool-=1
-    if player.invisiblecool<=0:
-        player.invisible=False
 
-    '''호르몬 출력'''
-    hormonecool += 1
-    if hormonecool>=c.HORMONETIME:
-        hormone_rect=image.hormone[hormonenum].get_rect()
-        hormone_rect.center=horpos
-        screen.blit(image.hormone[hormonenum], horpos)
-        if nowplayer_rect.colliderect(hormone_rect):
-            '''호르몬을 먹었다면,'''
-            nowhormone=c.HORMONE[hormonenum]
-            player.hormonelist.append([hormonenum, c.HORMONELAST])
-            dmg, spd, ssd, lif = (nowhormone[1], nowhormone[2], nowhormone[3], nowhormone[4])
-            player.damage += nowhormone[1]
-            player.speed += nowhormone[2]
-            player.shotspeed += nowhormone[3]
-            player.life += nowhormone[4]
+class HormoneSystem:
+    def __init__(self, player, buff_rect):
+        self.player = player
+        self.buff_rect = buff_rect
+        self.cooldown = 0
+        self.hormonenum = random.randint(0, 9)
+        self.position = (random.randint(15, WIDTH - 40), random.randint(15, HEIGHT - 40))
+        self.current_hormone = c.HORMONE[self.hormonenum]
 
-            hormonecool=0
-            hormoning=True
-            hormonetime=c.HORMONELAST
-            hormonenum=random.randint(0,9)
-            horpos = (random.randint(15, WIDTH - 40), random.randint(15, HEIGHT - 40))
+    def update_spawn(self, player_rect):
+        self.cooldown += 1
+        if self.cooldown < c.HORMONETIME:
+            return
 
-    '''호르몬 효과가 발동중이라면,'''
-    if hormoning:
-        for horm in player.hormonelist:
-            horm[1]-=1
-        if player.hormonelist[0][1]==0:
-            '''호르몬 효과가 끝났다면,'''
-            player.damage -= c.HORMONE[horm[0]][1]
-            player.speed -= c.HORMONE[horm[0]][2]
-            player.shotspeed -= c.HORMONE[horm[0]][3]
-            del(player.hormonelist[0])
-        if not player.hormonelist:
-            hormoning=False
-            pass
-        elif hormoning:
-            pygame.draw.rect(screen, c.RED, (player.xpos-20, player.ypos-30, 40 * player.hormonelist[len(player.hormonelist)-1][1] // c.HORMONELAST, 3))
-            text(nowhormone[0], player.xpos, player.ypos-45)
+        hormone_rect = image.hormone[self.hormonenum].get_rect()
+        hormone_rect.center = self.position
+        screen.blit(image.hormone[self.hormonenum], self.position)
+        if player_rect.colliderect(hormone_rect):
+            self.apply_to_player()
 
-    '''마우스 커서 표시'''
-    mousepos = pygame.mouse.get_pos()
-    mouseimg_rect.center = (mousepos[0], mousepos[1])
-    screen.blit(image.mouseimg, mouseimg_rect)
+    def apply_to_player(self):
+        self.current_hormone = c.HORMONE[self.hormonenum]
+        self.player.hormonelist.append([self.hormonenum, c.HORMONELAST])
+        self.player.damage += self.current_hormone[1]
+        self.player.speed += self.current_hormone[2]
+        self.player.shotspeed += self.current_hormone[3]
+        self.player.life += self.current_hormone[4]
+        self.cooldown = 0
+        self.hormonenum = random.randint(0, 9)
+        self.position = (random.randint(15, WIDTH - 40), random.randint(15, HEIGHT - 40))
 
-    '''플레이어 이미지 조정'''
-    if player.charging == True:
-        player.chargingtime += 1
-        player.speed = 0
-        charge_temp = player.chargingtime//c.CHARGETERM
-        if(charge_temp>=3):
-            charge_temp=3
-        nowshot=image.shotimg[charge_temp]
-        if player.direction=="left":
-            player.nowplayer=image.charge_left[charge_temp]
-        elif player.direction=="right":
-            player.nowplayer=image.charge_right[charge_temp]
-    else:
-        if player.direction=="left":
-            player.nowplayer = image.standing_left
-        elif player.direction=="right":
-            player.nowplayer = image.standing_right
+    def update_effects(self):
+        if not self.player.hormonelist:
+            return
 
-    '''이벤트가 발생하면,'''
-    keys = pygame.key.get_pressed()
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-            pygame.quit()
-            sys.exit
-        if event.type == pygame.KEYDOWN:
-            if keys[pygame.K_ESCAPE]:
-                running = False
+        for hormone in self.player.hormonelist:
+            hormone[1] -= 1
+        if self.player.hormonelist[0][1] == 0:
+            expired_hormone = self.player.hormonelist[0]
+            self.player.damage -= c.HORMONE[expired_hormone[0]][1]
+            self.player.speed -= c.HORMONE[expired_hormone[0]][2]
+            self.player.shotspeed -= c.HORMONE[expired_hormone[0]][3]
+            del(self.player.hormonelist[0])
+
+        if self.player.hormonelist:
+            pygame.draw.rect(
+                screen,
+                c.RED,
+                (
+                    self.player.xpos - 20,
+                    self.player.ypos - 30,
+                    40 * self.player.hormonelist[len(self.player.hormonelist) - 1][1] // c.HORMONELAST,
+                    3,
+                ),
+            )
+            text(self.current_hormone[0], self.player.xpos, self.player.ypos - 45)
+
+    def draw_buff(self):
+        if self.player.hormonelist:
+            self.buff_rect.center = (self.player.xpos, self.player.ypos)
+            screen.blit(image.buff, self.buff_rect)
+
+
+class BattleScene:
+    def __init__(self):
+        self.running = True
+        self.endset = 0
+        self.healthrange = 5
+        self.player = m.Player()
+        self.enemy = m.Enemy()
+        self.mouseimg_rect = image.mouseimg.get_rect()
+        self.buff_rect = image.buff.get_rect()
+        self.hormones = HormoneSystem(self.player, self.buff_rect)
+
+    def get_player_rect(self):
+        player_rect = self.player.nowplayer.get_rect()
+        player_rect.center = (self.player.xpos, self.player.ypos)
+        return player_rect
+
+    def get_enemy_rect(self):
+        enemy_rect = self.enemy.image.get_rect()
+        enemy_rect.center = (self.enemy.xpos, self.enemy.ypos)
+        return enemy_rect
+
+    def draw_mouse_cursor(self):
+        mousepos = pygame.mouse.get_pos()
+        self.mouseimg_rect.center = (mousepos[0], mousepos[1])
+        screen.blit(image.mouseimg, self.mouseimg_rect)
+        return mousepos
+
+    def handle_events(self, mousepos):
+        keys = pygame.key.get_pressed()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+                pygame.quit()
+                sys.exit
+            if event.type == pygame.KEYDOWN:
+                if keys[pygame.K_ESCAPE]:
+                    self.running = False
+                    break
+                if keys[pygame.K_a]:
+                    self.player.move_left(WIDTH)
+                if keys[pygame.K_d]:
+                    self.player.move_right(WIDTH)
+                if keys[pygame.K_w]:
+                    self.player.move_up(HEIGHT)
+                if keys[pygame.K_s]:
+                    self.player.move_down(HEIGHT)
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_a or event.key == pygame.K_d:
+                    dx = 0
+                if keys[pygame.K_w] == False or keys[pygame.K_s] == False:
+                    dy = 0
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if self.player.shotcool <= 0 and self.player.charging == False:
+                    self.player.charging = True
+            if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                if self.player.charging == True:
+                    self.player.create_shot(mousepos)
+
+    def draw_player_life(self):
+        for heart_index in range(self.player.life):
+            screen.blit(image.heart, (20 + 3 * (heart_index + 1) + HEARTSIZE[2] * heart_index, 20))
+
+    def update_player_shots(self, enemy_rect):
+        self.player.update_shots(enemy_rect, WIDTH, HEIGHT, screen, self.enemy)
+
+    def update_enemy_attack(self):
+        self.enemy.update_attack(self.player, WIDTH, HEIGHT)
+
+    def update_enemy_shots(self, player_rect):
+        self.enemy.update_shots(self.player, player_rect, WIDTH, HEIGHT, screen)
+
+    def update_end_state(self):
+        if self.player.life == 0:
+            self.running = False
+            self.endset = 1
+        if self.enemy.health <= 0:
+            self.running = False
+            self.endset = 2
+
+    def draw_player(self, player_rect):
+        if self.player.invisible == True and self.player.invisiblecool % 2 == 0:
+            screen.blit(self.player.nowplayer, player_rect)
+        elif self.player.invisible == False:
+            screen.blit(self.player.nowplayer, player_rect)
+
+    def draw_enemy(self):
+        enemy_rect = self.get_enemy_rect()
+        screen.blit(self.enemy.image, enemy_rect)
+        return enemy_rect
+
+    def draw_enemy_healthbar(self):
+        pygame.draw.rect(screen, c.WHITE, (self.enemy.xpos - 70, self.enemy.ypos - 40, 140, 7))
+        current_width = int(0.1 * (self.enemy.health - (1400 * self.healthrange)))
+        pygame.draw.rect(screen, c.COLOR[self.healthrange], (self.enemy.xpos - 70, self.enemy.ypos - 40, current_width, 7))
+        if current_width <= 0:
+            self.healthrange -= 1
+            self.enemy.smaller()
+
+    def run(self):
+        menubgm.stop()
+        gamebgm.play()
+        while self.running:
+            screen.fill(c.BACKGROUNDCOLOR)
+            draw_tiles()
+            self.player.update()
+            mousepos = self.draw_mouse_cursor()
+            self.handle_events(mousepos)
+            player_rect = self.get_player_rect()
+            enemy_rect = self.get_enemy_rect()
+            self.hormones.update_spawn(player_rect)
+            self.hormones.update_effects()
+            if not self.running:
                 break
-            if keys[pygame.K_a]:
-                player.direction="left"
-                player.nextpic()
-                player.xpos -= player.speed
-                if player.xpos<10 or player.xpos>WIDTH-15:
-                        player.xpos+=player.speed
-            if keys[pygame.K_d]:
-                player.direction="right"
-                player.nextpic()
-                player.xpos += player.speed
-                if player.xpos<10 or player.xpos>WIDTH-15:
-                        player.xpos-=player.speed
-            if keys[pygame.K_w]:
-                player.ypos -= player.speed
-                if player.ypos<10 or player.ypos>HEIGHT-15:
-                        player.ypos+=player.speed
-            if keys[pygame.K_s]:
-                player.ypos += player.speed
-                if player.ypos<10 or player.ypos>HEIGHT-15:
-                        player.ypos-=player.speed
-        elif event.type == pygame.KEYUP:
-            if event.key == pygame.K_a or event.key == pygame.K_d:
-                dx = 0
-            if keys[pygame.K_w] == False or keys[pygame.K_s] == False:
-                dy = 0
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button==1:
-            if player.shotcool <= 0 and player.charging==False:
-                player.charging=True
-                player.chargingtime+=1
-                player.shotcool==c.SHOTGAP
-        if event.type == pygame.MOUSEBUTTONUP and event.button==1:
-            player.speed=c.MAXSPEED
-            player.charging=False
-            player.chargingtime=0
-            theta = math.pi / 2 - (math.atan2(mousepos[1] - player.ypos + 5, mousepos[0] - player.xpos - 10))
-            shotposlist.append([charge_temp, player.xpos - 10, player.ypos + 5, theta])
-            shotcool = c.SHOTGAP
-            if player.xpos>mousepos[0]:
-                nowplayer=image.standing_left
-            else:
-                nowplayer=image.standing_right
+            self.draw_player_life()
+            self.update_player_shots(enemy_rect)
+            self.update_enemy_attack()
+            player_rect = self.get_player_rect()
+            self.update_enemy_shots(player_rect)
+            self.update_end_state()
+            player_rect = self.get_player_rect()
+            self.draw_player(player_rect)
+            self.hormones.draw_buff()
+            self.draw_enemy()
+            self.draw_enemy_healthbar()
+            fpsClock.tick(c.FPS)
+            pygame.display.flip()
+        return self.endset
 
-    '''종료 조건 검사'''
-    if not running:
-        break
 
-    '''플레이어 체력 표시'''
-    for k in range(player.life):
-        screen.blit(image.heart, (20 + 3 * (k + 1) + HEARTSIZE[2]* k, 20))
+def show_menu():
+    selected = False
+    menubgm.play()
+    while not selected:
+        screen.fill(c.BACKGROUNDCOLOR)
+        screen.blit(image.menu, (0, 0))
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                selected = True
+        pygame.display.flip()
 
-    '''플레이어가 쏜 탄알 출력'''
-    index = 0
-    for shot in shotposlist:
-        rotated_shotimg = pygame.transform.rotate(image.shotimg[shot[0]], 90 + (int(math.degrees(shot[3]))))
-        shot[1] += player.shotspeed * math.sin(shot[3])
-        shot[2] += player.shotspeed * math.cos(shot[3])
-        shotimg_rect = nowshot.get_rect()
-        if (shot[1] < 0 or shot[2] < 0 or shot[1] > WIDTH or shot[2] > HEIGHT) :
-            del (shotposlist[index])
-        elif (monster_rect.collidepoint(shot[1], shot[2])):
-            bang.health-=player.damage
-            del(shotposlist[index])
-        else:
-            screen.blit(rotated_shotimg, (shot[1], shot[2]))
-            index += 1
 
-    '''몬스터의 공격'''
-    yap+=1
-    if yap<30:
-        bang.image=image.mob
-    elif yap==30:
-        if bang.choice==5:
-            bang.image = image.mob_ready
-        else:
-            bang.image=image.mob_charge
-    elif yap>=35:
-        bang.image=image.mob_shoot
-        if (bang.choice == 1):
-            '''엷은 탄막 3개'''
-            surune+=1
-            if surune <= 5:
-                bang.shot_1()
-            elif surune<=13:
-                pass
-            elif surune<=18:
-                bang.shot_1()
-            elif surune<=26:
-                pass
-            elif surune<=31:
-                bang.shot_1()
-            else:
-                bang.image=image.mob
-                yap=0
-                surune = 0
-                bang.choice = 5
-        elif (bang.choice == 2):
-            '''오각형 산탄 패턴'''
-            surune += 1
-            if surune < 5:
-                bang.shot_2()
-            elif surune < 7:
-                bang.temp_theta = (math.atan2(player.xpos - bang.xpos, player.ypos - bang.ypos))
-            elif surune < 11:
-                bang.shot_2()
-            elif surune < 13:
-                bang.temp_theta = (math.atan2(player.xpos - bang.xpos, player.ypos - bang.ypos))
-            elif surune < 17:
-                bang.shot_2()
-            elif surune < 19:
-                bang.temp_theta = (math.atan2(player.xpos - bang.xpos, player.ypos - bang.ypos))
-            elif surune < 23:
-                bang.shot_2()
-            else:
-                bang.temp_theta = 0
-                bang.image=image.mob
-                surune=0
-                bang.choice = 5
-                yap=0
-        elif (bang.choice==3):
-            '''원형 유도탄 패턴'''
-            surune+=1
-            if surune<90:
-                if surune%3==0:
-                    bang.shot_3(player)
-            else:
-                bang.image=image.mob
-                surune=0
-                yap=0
-                bang.choice = 5
-        elif (bang.choice==4):
-            '''별 패턴'''
-            surune+=1
-            if surune<=49:
-                if surune%7==0:
-                    bang.shot_4(screen, player)
-            else:
-                bang.image=image.mob
-                surune=0
-                yap=0
-                bang.choice = 5
-        else:
-            '''몬스터 텔레포트'''
-            bang.image=image.mob_telpo
-            surune=0
-            yap=0
-            bang.choice=random.randint(1,bang.level)
-            bang.xpos = random.randint(20, WIDTH - 50)
-            bang.ypos = random.randint(20, HEIGHT - 50)
+def show_mission():
+    missioning = 50
+    while missioning:
+        screen.fill(c.BACKGROUNDCOLOR)
+        screen.blit(image.mission, (0, 0))
+        missioning -= 1
+        pygame.display.flip()
 
-    '''몬스터 공격 출력'''
-    for enemyshot in bang.bullet:
-        if enemyshot[4]==4 and bang.time < 600:
-            bang.time+=1
-            continue
-        else:
-            enemyshot[1] += bang.shotspeed * math.sin(enemyshot[3])
-            enemyshot[2] += bang.shotspeed * math.cos(enemyshot[3])
-        if (enemyshot[1] < 0 or enemyshot[2] < 0 or enemyshot[1] > WIDTH or enemyshot[2] > HEIGHT):
-            del(enemyshot)
-        elif (nowplayer_rect.collidepoint((enemyshot[1], enemyshot[2])) and player.invisible==False):
-            player.invisible=True
-            player.invisiblecool=c.INVISIBLETIME
-            player.life-=1
-            del(enemyshot)
-        else:
-            screen.blit(bang.shot, (enemyshot[1], enemyshot[2]))
 
-    '''플레이어가 사망했다면'''
-    if player.life==0:
-        running = False
-        endset=1
-
-    '''몬스터가 사살되었다면'''
-    if bang.health<=0:
-        running = False
-        endset=2
-        break
-
-    '''캐릭터 이미지 출력'''
-    nowplayer_rect = player.nowplayer.get_rect()
-    nowplayer_rect.center = (player.xpos, player.ypos)
-    if player.invisible == True and player.invisiblecool%2==0:
-        #피격무적이 발동중이라면 깜빡거리게 출력
-        screen.blit(player.nowplayer, nowplayer_rect)
-    elif player.invisible == False:
-        screen.blit(player.nowplayer, nowplayer_rect)
-
-    '''호르몬 투여시 버프 모양 출력'''
-    if hormoning:
-        buff_rect.center = (player.xpos, player.ypos)
-        screen.blit(image.buff, buff_rect)
-
-    '''몬스터 이미지 출력'''
-    monster_rect = bang.image.get_rect()
-    monster_rect.center = (bang.xpos, bang.ypos)
-    screen.blit(bang.image, monster_rect)
-
-    '''몬스터 체력바 출력'''
-    pygame.draw.rect(screen, c.WHITE, (bang.xpos-70, bang.ypos-40, 140, 7))
-    pygame.draw.rect(screen, c.COLOR[healthrange], (bang.xpos - 70, bang.ypos - 40, int(0.1 * (bang.health-(1400*healthrange))), 7))
-    if (int(0.1 * (bang.health - (1400 * healthrange))) <= 0) :
-        healthrange -= 1
-        bang.smaller()
-
-    fpsClock.tick(c.FPS)
+def show_ending(endset):
+    screen.fill(c.BACKGROUNDCOLOR)
+    gamebgm.stop()
+    endbgm.play()
+    if endset == 1:
+        screen.blit(image.gameover, (0, 0))
+    elif endset == 2:
+        screen.blit(image.youwin, (0, 0))
     pygame.display.flip()
 
-'''게임 오버 (승리/패배)'''
-screen.fill(c.BACKGROUNDCOLOR)
-gamebgm.stop()
-endbgm.play()
-if endset==1:
-    screen.blit(image.gameover, (0,0))
-elif endset==2:
-    screen.blit(image.youwin, (0,0))
-pygame.display.flip()
+    ending = True
+    while ending:
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                ending = False
+    return ending
 
-ending=True
-while ending:
-    for event in pygame.event.get():
-        if event.key==pygame.K_ESCAPE:
-            ending=False
 
-'''게임 종료시'''
-if running==False and ending==False:
-    running = False
+show_menu()
+show_mission()
+scene = BattleScene()
+endset = scene.run()
+ending = show_ending(endset)
+
+if scene.running == False and ending == False:
     pygame.quit()
     sys.exit
